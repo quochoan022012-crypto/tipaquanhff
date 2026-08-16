@@ -8,24 +8,55 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: 
-      image: theos/theos:latest  # Docker image có sẵn Theos + SDK
     
     steps:
       - uses: actions/checkout@v3
       
+      - name: Install Theos & Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git build-essential unzip curl wget libxml2-dev libplist-dev libzip-dev
+          
+          # Clone Theos
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          
+          # Tải SDK iOS 14.5 (phiên bản phổ biến nhất)
+          cd $HOME/theos/sdks
+          wget https://github.com/theos/sdks/archive/master.zip
+          unzip -o master.zip
+          cp -r sdks-master/* ./
+          rm -rf sdks-master master.zip
+          
+          # Tạo symlink cho SDK
+          cd $HOME/theos/sdks
+          ln -sf iPhoneOS14.5.sdk iPhoneOS.sdk
+          
+          # Thiết lập biến môi trường
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+          
       - name: Build package
         run: |
+          export THEOS=$HOME/theos
           make package
           
-      - name: Find and prepare .tipa file
+      - name: Prepare .tipa file
         run: |
-          # Tìm file .deb hoặc .tipa
-          find . -name "*.deb" -exec cp {} ./package.tipa \;
-          find . -name "*.tipa" -exec cp {} ./package.tipa \;
-          # Nếu không tìm thấy, thử tạo file rỗng để tránh lỗi upload
-          if [ ! -f ./package.tipa ]; then
-            echo "No .deb or .tipa found, creating placeholder"
+          # Tìm tất cả file .deb và .tipa
+          DEB_FILE=$(find . -name "*.deb" | head -n 1)
+          TIPA_FILE=$(find . -name "*.tipa" | head -n 1)
+          
+          if [ -f "$DEB_FILE" ]; then
+            echo "Found .deb file: $DEB_FILE"
+            cp "$DEB_FILE" ./package.tipa
+          elif [ -f "$TIPA_FILE" ]; then
+            echo "Found .tipa file: $TIPA_FILE"
+            cp "$TIPA_FILE" ./package.tipa
+          else
+            echo "⚠️ No .deb or .tipa file found!"
+            echo "Files in current directory:"
+            ls -la
+            # Tạo file rỗng để tránh lỗi upload
             touch ./package.tipa
           fi
           
