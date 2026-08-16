@@ -1,544 +1,465 @@
-#import "menu.h"
-#import "icons.h"
+// ModMenuViewController.mm — Giao diện mới như ảnh yêu cầu
 #import "ModMenuViewController.h"
-#import "ESPPrefs.h"
-#import "esp.h"
-#import "../../mahoa.h"
+#import "../esp/drawing_view/esp.h"
+#import "../esp/drawing_view/ESPPrefs.h"
+#import "../esp/drawing_view/menu.h"
+#import "../mahoa.h"
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
-static const CGFloat kMenuButtonSize = 56.0f;
-static const CGFloat kAccentR = 1.0f, kAccentG = 0.35f, kAccentB = 0.2f;
-static const CGFloat kAuxButtonSize = 46.0f;
-static const CGFloat kAuxGap = 8.0f;
+static const CGFloat kPanelWidth    = 320.0f;
+static const CGFloat kPanelHeight   = 400.0f;
+static const CGFloat kHeaderHeight  = 50.0f;
+static const CGFloat kTopTabHeight  = 40.0f;
+static const CGFloat kRowHeight     = 42.0f;
+static const CGFloat kCheckboxSize  = 22.0f;
 
-static NSString *titleForTriggerMode(int mode) {
-    static NSArray<NSString *> *names;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ names = @[ @"Auto", @"Fire", @"Scope", @"Fire/Scope" ]; });
-    if (mode < 0 || mode >= (int)names.count) mode = 0;
-    return names[(NSUInteger)mode];
-}
+// Màu sắc theo ảnh mẫu (nền tối, chữ trắng, checkbox xanh)
+#define kColorBG          [UIColor colorWithRed:0.08f green:0.08f blue:0.12f alpha:0.95f]
+#define kColorHeader      [UIColor colorWithRed:0.05f green:0.05f blue:0.08f alpha:1.0f]
+#define kColorTabBar      [UIColor colorWithRed:0.12f green:0.12f blue:0.18f alpha:1.0f]
+#define kColorTabActive   [UIColor colorWithRed:0.20f green:0.20f blue:0.28f alpha:1.0f]
+#define kColorTabText     [UIColor colorWithWhite:0.6f alpha:1.0f]
+#define kColorTabTextActive [UIColor whiteColor]
+#define kColorRowBG       [UIColor colorWithRed:0.10f green:0.10f blue:0.16f alpha:1.0f]
+#define kColorText        [UIColor colorWithWhite:0.95f alpha:1.0f]
+#define kColorSeparator   [UIColor colorWithWhite:0.2f alpha:1.0f]
+#define kColorCheckOn     [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f]
+#define kColorCheckBorder [UIColor colorWithWhite:0.4f alpha:1.0f]
+#define kColorCheckOff    [UIColor colorWithWhite:0.2f alpha:1.0f]
+#define kColorSectionText [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f]
 
-static NSString *titleForAimPos(int aimPos) {
-    static NSArray<NSString *> *names;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ names = @[ @"Head", @"Neck", @"Chest" ]; });
-    if (aimPos < 0 || aimPos >= (int)names.count) aimPos = 0;
-    return names[(NSUInteger)aimPos];
-}
+typedef NS_ENUM(NSInteger, MenuTab) {
+    MenuTabESP    = 0,
+    MenuTabAimbot = 1,
+    MenuTabKhac   = 2,
+};
 
-@interface MenuView ()
-@property (nonatomic, strong) UIButton *menuButton;
-@property (nonatomic, strong) UIButton *aimbotButton;
-@property (nonatomic, strong) UIButton *aimbotModeButton;
-@property (nonatomic, strong) UIButton *aimbotTargetButton;
+@interface ModMenuViewController () <UIGestureRecognizerDelegate>
+@property (nonatomic, assign) MenuTab currentTab;
+@property (nonatomic, strong) UIView *floatingPanel;
+@property (nonatomic, strong) UIScrollView *contentScrollView;
+@property (nonatomic, strong) UIView *contentContainer;
+@property (nonatomic, strong) NSMutableArray<UIButton *> *tabButtons;
 @property (nonatomic, assign) NSInteger trackingPointerId;
-@property (nonatomic, assign) BOOL touchOnButton;
-@property (nonatomic, assign) BOOL buttonDragging;
-@property (nonatomic, assign) BOOL touchOnAimbotButton;
-@property (nonatomic, assign) BOOL touchOnAimbotModeButton;
-@property (nonatomic, assign) BOOL touchOnAimbotTargetButton;
-@property (nonatomic, assign) BOOL aimbotButtonDragging;
-@property (nonatomic, assign) BOOL aimbotModeButtonDragging;
-@property (nonatomic, assign) BOOL aimbotTargetButtonDragging;
-@property (nonatomic, assign) CGPoint buttonDragStartCenter;
-@property (nonatomic, assign) CGPoint buttonDragStartPoint;
-@property (nonatomic, assign) CGPoint aimbotDragStartCenter;
-@property (nonatomic, assign) CGPoint aimbotDragStartPoint;
-@property (nonatomic, assign) CGPoint aimbotModeDragStartCenter;
-@property (nonatomic, assign) CGPoint aimbotModeDragStartPoint;
-@property (nonatomic, assign) CGPoint aimbotTargetDragStartCenter;
-@property (nonatomic, assign) CGPoint aimbotTargetDragStartPoint;
-@property (nonatomic, strong) ModMenuViewController *presentedModMenu;
-@property (nonatomic, strong) UISwitch *floatSwitch;
-
-@property BOOL touchOnSwitch;
-@property BOOL switchDragging;
-@property CGPoint switchDragStartCenter;
-@property CGPoint switchDragStartPoint;
-
+@property (nonatomic, assign) BOOL menuDragging;
+@property (nonatomic, assign) CGPoint menuDragStartOrigin;
+@property (nonatomic, assign) CGPoint menuDragStartTouch;
+@property (nonatomic, copy) void (^onCloseBlock)(void);
+@property (nonatomic, copy) void (^onExitHUDRequested)(void);
 @end
 
-@implementation MenuView
+@implementation ModMenuViewController
 
-- (void)layoutSubviews {
-    [super layoutSubviews];
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = [UIColor clearColor];
+    self.view.multipleTouchEnabled = YES;
+    _trackingPointerId = -1;
+    _currentTab = MenuTabESP;
+    _tabButtons = [NSMutableArray array];
+    
+    [self setupFloatingPanel];
+    [self setupHeaderBar];
+    [self setupTopTabBar];
+    [self setupContentArea];
+    [self loadTabContent:_currentTab];
 }
 
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        self.backgroundColor = [UIColor clearColor];
-        self.userInteractionEnabled = YES;
-        [self setupMenuButton];
+- (void)setupFloatingPanel {
+    CGPoint pos = [self loadPanelPosition];
+    _floatingPanel = [[UIView alloc] initWithFrame:
+        CGRectMake(pos.x, pos.y, kPanelWidth, kPanelHeight)];
+    _floatingPanel.backgroundColor = kColorBG;
+    _floatingPanel.layer.cornerRadius = 16.0f;
+    _floatingPanel.layer.shadowColor = [UIColor blackColor].CGColor;
+    _floatingPanel.layer.shadowOpacity = 0.7f;
+    _floatingPanel.layer.shadowRadius = 24.0f;
+    _floatingPanel.layer.shadowOffset = CGSizeMake(0, 8);
+    _floatingPanel.layer.masksToBounds = NO;
+    _floatingPanel.layer.borderWidth = 0.5f;
+    _floatingPanel.layer.borderColor = [UIColor colorWithWhite:0.3f alpha:0.3f].CGColor;
+    [self.view addSubview:_floatingPanel];
+}
+
+- (CGPoint)loadPanelPosition {
+    CGFloat x = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingPanelX"];
+    CGFloat y = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingPanelY"];
+    if (x <= 10.0f && y <= 10.0f) {
+        CGRect s = [UIScreen mainScreen].bounds;
+        x = (s.size.width - kPanelWidth) / 2.0f;
+        y = 80.0f;
     }
-    return self;
+    return CGPointMake(x, y);
 }
 
-- (void)setupMenuButton {
-    _floatSwitch = [[UISwitch alloc] init];
-    _floatSwitch.transform = CGAffineTransformMakeScale(0.75f, 0.75f);
-    _floatSwitch.center = CGPointMake(
-        CGRectGetMaxX(_aimbotButton.frame) + 35,
-        CGRectGetMidY(_aimbotButton.frame)
-    );
-    [_floatSwitch setOn:ESPPrefsBool(NSSENCRYPT("testGhost"), NO)];
-    [_floatSwitch addTarget:self
-                     action:@selector(onSwitchChanged:)
-           forControlEvents:UIControlEventValueChanged];
+// ─── HEADER ──────────────────────────────────
+- (void)setupHeaderBar {
+    UIView *hdr = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, kHeaderHeight)];
+    hdr.backgroundColor = kColorHeader;
+    hdr.layer.cornerRadius = 16.0f;
+    hdr.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    [_floatingPanel addSubview:hdr];
     
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleSwitchPan:)];
-    [_floatSwitch addGestureRecognizer:pan];
-    [self addSubview:_floatSwitch];
+    // Icon game
+    if (@available(iOS 13.0, *)) {
+        UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectMake(14, 13, 24, 24)];
+        icon.image = [UIImage systemImageNamed:@"gamecontroller.fill"];
+        icon.tintColor = [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f];
+        icon.contentMode = UIViewContentModeScaleAspectFit;
+        [hdr addSubview:icon];
+    }
+    
+    // Title
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(44, 0, kPanelWidth - 100, kHeaderHeight)];
+    title.text = @"Quanh External - Free Fire";
+    title.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
+    title.textColor = [UIColor whiteColor];
+    [hdr addSubview:title];
+    
+    // Nút đóng
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
+    close.frame = CGRectMake(kPanelWidth - 44, 8, 32, 32);
+    close.backgroundColor = [UIColor colorWithWhite:0.3f alpha:0.2f];
+    close.layer.cornerRadius = 16.0f;
+    if (@available(iOS 13.0, *)) {
+        UIImage *x = [UIImage systemImageNamed:@"xmark"];
+        [close setImage:x forState:UIControlStateNormal];
+    } else {
+        [close setTitle:@"✕" forState:UIControlStateNormal];
+    }
+    close.tintColor = [UIColor colorWithWhite:0.6f alpha:1.0f];
+    [close addTarget:self action:@selector(closeTapped) forControlEvents:UIControlEventTouchUpInside];
+    [hdr addSubview:close];
+}
 
-    _menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    _menuButton.frame = CGRectMake(20, 100, kMenuButtonSize, kMenuButtonSize);
-    _menuButton.backgroundColor = [UIColor clearColor];
+// ─── TAB BAR ─────────────────────────────────
+- (void)setupTopTabBar {
+    UIView *tabBar = [[UIView alloc] initWithFrame:
+        CGRectMake(0, kHeaderHeight, kPanelWidth, kTopTabHeight)];
+    tabBar.backgroundColor = kColorTabBar;
+    [_floatingPanel addSubview:tabBar];
     
-    UIImage *icon = FloatButtonIcon();
-    if (!icon) {
-        if (@available(iOS 13.0, *)) {
-            _menuButton.tintColor = [UIColor colorWithRed:kAccentR green:kAccentG blue:kAccentB alpha:1.0f];
-            icon = [UIImage systemImageNamed:@"line.3.horizontal"];
-            UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:22 weight:UIImageSymbolWeightMedium];
-            icon = [icon imageByApplyingSymbolConfiguration:cfg];
+    NSArray *titles = @[@"ESP", @"AIMBOT", @"KHÁC"];
+    NSInteger n = titles.count;
+    CGFloat tabW = kPanelWidth / (CGFloat)n;
+    
+    for (NSInteger i = 0; i < n; i++) {
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.frame = CGRectMake(tabW * i, 0, tabW, kTopTabHeight);
+        btn.tag = i;
+        BOOL active = (i == _currentTab);
+        
+        [btn setTitle:titles[i] forState:UIControlStateNormal];
+        btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:active ? UIFontWeightBold : UIFontWeightMedium];
+        [btn setTitleColor:active ? kColorTabTextActive : kColorTabText forState:UIControlStateNormal];
+        btn.backgroundColor = active ? kColorTabActive : [UIColor clearColor];
+        
+        if (active) {
+            UIView *indicator = [[UIView alloc] initWithFrame:
+                CGRectMake(tabW * 0.3f, kTopTabHeight - 3, tabW * 0.4f, 3)];
+            indicator.backgroundColor = kColorSectionText;
+            indicator.layer.cornerRadius = 1.5f;
+            indicator.tag = 9999;
+            [btn addSubview:indicator];
+        }
+        
+        [btn addTarget:self action:@selector(tabButtonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [tabBar addSubview:btn];
+        [_tabButtons addObject:btn];
+    }
+}
+
+// ─── CONTENT AREA ────────────────────────────
+- (void)setupContentArea {
+    CGFloat topY = kHeaderHeight + kTopTabHeight;
+    CGFloat contentH = kPanelHeight - topY;
+    
+    UIView *contentClip = [[UIView alloc] initWithFrame:CGRectMake(0, topY, kPanelWidth, contentH)];
+    contentClip.backgroundColor = [UIColor clearColor];
+    contentClip.clipsToBounds = YES;
+    [_floatingPanel addSubview:contentClip];
+    
+    _contentScrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, contentH)];
+    _contentScrollView.backgroundColor = [UIColor clearColor];
+    _contentScrollView.showsVerticalScrollIndicator = NO;
+    _contentScrollView.bounces = YES;
+    [contentClip addSubview:_contentScrollView];
+    
+    _contentContainer = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, contentH)];
+    _contentContainer.backgroundColor = [UIColor clearColor];
+    [_contentScrollView addSubview:_contentContainer];
+}
+
+// ─── CHECKBOX ─────────────────────────────────
+- (UIView *)makeCheckboxWithState:(BOOL)checked {
+    UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kCheckboxSize, kCheckboxSize)];
+    box.backgroundColor = checked ? kColorCheckOn : kColorCheckOff;
+    box.layer.cornerRadius = 4.0f;
+    box.layer.borderWidth = 1.5f;
+    box.layer.borderColor = checked ? kColorCheckOn.CGColor : kColorCheckBorder.CGColor;
+    box.tag = checked ? 1 : 0;
+    
+    if (checked && @available(iOS 13.0, *)) {
+        UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(3, 3, 16, 16)];
+        check.image = [UIImage systemImageNamed:@"checkmark"];
+        check.tintColor = [UIColor whiteColor];
+        check.contentMode = UIViewContentModeScaleAspectFit;
+        check.tag = 9999;
+        [box addSubview:check];
+    }
+    return box;
+}
+
+- (UIView *)buildCheckboxRowWithTitle:(NSString *)title key:(NSString *)key {
+    BOOL on = [[NSUserDefaults standardUserDefaults] boolForKey:key];
+    
+    UIView *row = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, kRowHeight)];
+    row.backgroundColor = kColorRowBG;
+    row.tag = 100;
+    objc_setAssociatedObject(row, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    
+    // Checkbox bên trái
+    UIView *cb = [self makeCheckboxWithState:on];
+    cb.frame = CGRectMake(16, (kRowHeight - kCheckboxSize) / 2.0f, kCheckboxSize, kCheckboxSize);
+    cb.tag = 200;
+    objc_setAssociatedObject(cb, "isCheckbox", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [row addSubview:cb];
+    
+    // Label
+    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(16 + kCheckboxSize + 12, 0, kPanelWidth - 60, kRowHeight)];
+    lbl.text = title;
+    lbl.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    lbl.textColor = kColorText;
+    [row addSubview:lbl];
+    
+    // Separator
+    UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(16, kRowHeight - 0.5, kPanelWidth - 32, 0.5)];
+    sep.backgroundColor = kColorSeparator;
+    [row addSubview:sep];
+    
+    return row;
+}
+
+// ─── LOAD TAB CONTENT ─────────────────────────
+- (void)loadTabContent:(MenuTab)tab {
+    for (UIView *v in _contentContainer.subviews) [v removeFromSuperview];
+    _contentScrollView.contentOffset = CGPointZero;
+    
+    CGFloat y = 0;
+    CGFloat w = kPanelWidth;
+    
+    if (tab == MenuTabESP) {
+        y = [self addSectionTitle:@"ESP" atY:y width:w];
+        NSArray *items = @[
+            @[@"ESP ĐƯỜNG KẺ", @"Line"],
+            @[@"ESP HỘP", @"Box"],
+            @[@"ESP MÁU", @"Health"],
+            @[@"ESP TÊN", @"Name"],
+            @[@"ESP SỐ LƯỢNG", @"Count"]
+        ];
+        y = [self addCheckboxRows:items atY:y width:w];
+        
+    } else if (tab == MenuTabAimbot) {
+        y = [self addSectionTitle:@"AIMBOT" atY:y width:w];
+        NSArray *items = @[
+            @[@"Bật Aimbot", @"Aimbot"],
+            @[@"Rage Aimbot", @"AimRage"],
+            @[@"Đường Aim", @"LineAim"]
+        ];
+        y = [self addCheckboxRows:items atY:y width:w];
+        
+    } else if (tab == MenuTabKhac) {
+        y = [self addSectionTitle:@"KHÁC" atY:y width:w];
+        NSArray *items = @[
+            @[@"Vô hạn đạn", @"VohaDan"],
+            @[@"Bắn nhanh", @"FastFire"],
+            @[@"Cam cao", @"camcao"],
+            @[@"Không cần reload", @"NoReLoad"]
+        ];
+        y = [self addCheckboxRows:items atY:y width:w];
+    }
+    
+    // Nút LƯU CÀI ĐẶT
+    y += 8;
+    UIButton *saveBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+    saveBtn.frame = CGRectMake(20, y, w - 40, 40);
+    saveBtn.backgroundColor = kColorCheckOn;
+    saveBtn.layer.cornerRadius = 8.0f;
+    [saveBtn setTitle:@"LƯU CÀI ĐẶT" forState:UIControlStateNormal];
+    [saveBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    saveBtn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
+    [saveBtn addTarget:self action:@selector(saveSettingsTapped) forControlEvents:UIControlEventTouchUpInside];
+    [_contentContainer addSubview:saveBtn];
+    y += 48;
+    
+    _contentContainer.frame = CGRectMake(0, 0, w, y + 10);
+    _contentScrollView.contentSize = _contentContainer.frame.size;
+}
+
+- (CGFloat)addSectionTitle:(NSString *)title atY:(CGFloat)y width:(CGFloat)w {
+    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(16, y + 6, w - 32, 22)];
+    lbl.text = title;
+    lbl.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
+    lbl.textColor = kColorSectionText;
+    [_contentContainer addSubview:lbl];
+    return y + 32;
+}
+
+- (CGFloat)addCheckboxRows:(NSArray *)items atY:(CGFloat)y width:(CGFloat)w {
+    for (NSArray *item in items) {
+        UIView *row = [self buildCheckboxRowWithTitle:item[0] key:item[1]];
+        row.frame = CGRectMake(0, y, w, kRowHeight);
+        [_contentContainer addSubview:row];
+        y += kRowHeight;
+    }
+    return y;
+}
+
+// ─── ACTIONS ──────────────────────────────────
+- (void)tabButtonTapped:(UIButton *)sender {
+    MenuTab tab = (MenuTab)sender.tag;
+    if (tab == _currentTab) return;
+    _currentTab = tab;
+    [self updateTabBarForTab:tab];
+    [self loadTabContent:tab];
+}
+
+- (void)updateTabBarForTab:(MenuTab)tab {
+    NSInteger n = _tabButtons.count;
+    CGFloat tabW = kPanelWidth / (CGFloat)n;
+    for (NSInteger i = 0; i < n; i++) {
+        UIButton *btn = _tabButtons[i];
+        BOOL active = (i == tab);
+        btn.backgroundColor = active ? kColorTabActive : [UIColor clearColor];
+        [btn setTitleColor:active ? kColorTabTextActive : kColorTabText forState:UIControlStateNormal];
+        btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:active ? UIFontWeightBold : UIFontWeightMedium];
+        [[btn viewWithTag:9999] removeFromSuperview];
+        if (active) {
+            UIView *indicator = [[UIView alloc] initWithFrame:
+                CGRectMake(tabW * 0.3f, kTopTabHeight - 3, tabW * 0.4f, 3)];
+            indicator.backgroundColor = kColorSectionText;
+            indicator.layer.cornerRadius = 1.5f;
+            indicator.tag = 9999;
+            [btn addSubview:indicator];
         }
     }
-    
-    if (icon) {
-        // ✅ QUAN TRỌNG: Dùng AlwaysOriginal để giữ màu gốc của icon
-        icon = [icon imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal];
-        [_menuButton setImage:icon forState:UIControlStateNormal];
-        // ❌ KHÔNG ép màu xanh
-        // _menuButton.tintColor = [UIColor colorWithRed:0.20f green:0.85f blue:0.25f alpha:1.0f];
-        
-        // Animation vẫn giữ nguyên nếu muốn
-        //CABasicAnimation *rotationAnimation = [CABasicAnimation animationWithKeyPath:@"transform.rotation.z"];
-        //rotationAnimation.toValue = [NSNumber numberWithFloat:M_PI * 2.0];
-        //rotationAnimation.duration = 6.0;
-        //rotationAnimation.cumulative = YES;
-        //rotationAnimation.repeatCount = HUGE_VALF;
-        //rotationAnimation.removedOnCompletion = NO;
-        //[_menuButton.imageView.layer addAnimation:rotationAnimation forKey:@"menuButtonRotation"];
-
-    } else {
-        [_menuButton setTitle:@"M" forState:UIControlStateNormal];
-        [_menuButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-        _menuButton.titleLabel.font = [UIFont boldSystemFontOfSize:20.0f];
-    }
-    [self addSubview:_menuButton];
-
-    _aimbotButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _aimbotButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                     _menuButton.frame.origin.y,
-                                     kAuxButtonSize,
-                                     kAuxButtonSize);
-    _aimbotButton.backgroundColor = [UIColor colorWithWhite:0.12f alpha:0.90f];
-    _aimbotButton.layer.cornerRadius = kAuxButtonSize / 2.0f;
-    _aimbotButton.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
-    [_aimbotButton setTitle:@"AIM" forState:UIControlStateNormal];
-    [_aimbotButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    [self addSubview:_aimbotButton];
-
-    _aimbotModeButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _aimbotModeButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                         CGRectGetMaxY(_menuButton.frame) + kAuxGap,
-                                         kAuxButtonSize,
-                                         kAuxButtonSize);
-    _aimbotModeButton.backgroundColor = [UIColor colorWithWhite:0.12f alpha:0.90f];
-    _aimbotModeButton.layer.cornerRadius = kAuxButtonSize / 2.0f;
-    _aimbotModeButton.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
-    [_aimbotModeButton setTitle:titleForTriggerMode(0) forState:UIControlStateNormal];
-    [_aimbotModeButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    // [self addSubview:_aimbotModeButton]; // XOÁ HIỂN THỊ BUTTON MODE
-
-    _aimbotTargetButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _aimbotTargetButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                           CGRectGetMaxY(_aimbotModeButton.frame) + kAuxGap,
-                                           kAuxButtonSize,
-                                           kAuxButtonSize);
-    _aimbotTargetButton.backgroundColor = [UIColor colorWithWhite:0.12f alpha:0.90f];
-    _aimbotTargetButton.layer.cornerRadius = kAuxButtonSize / 2.0f;
-    _aimbotTargetButton.titleLabel.font = [UIFont boldSystemFontOfSize:12.0f];
-    [_aimbotTargetButton setTitle:titleForAimPos(0) forState:UIControlStateNormal];
-    [_aimbotTargetButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    // [self addSubview:_aimbotTargetButton]; // XOÁ HIỂN THỊ BUTTON TARGET
-
-    [self loadMenuButtonPosition];
-    [self refreshAimbotButtonTitles];
 }
 
-- (void)onSwitchChanged:(UISwitch *)sender {
-    ESPPrefsSetBool(NSSENCRYPT("testGhost"), sender.isOn);
-    ESPPrefsSync();
+- (void)checkboxTapped:(UIView *)row {
+    NSString *key = objc_getAssociatedObject(row, "key");
+    if (!key) return;
+    
+    UIView *cb = nil;
+    for (UIView *v in row.subviews) {
+        if (objc_getAssociatedObject(v, "isCheckbox")) {
+            cb = v;
+            break;
+        }
+    }
+    if (!cb) return;
+    
+    BOOL newState = (cb.tag == 0);
+    cb.tag = newState ? 1 : 0;
+    cb.backgroundColor = newState ? kColorCheckOn : kColorCheckOff;
+    cb.layer.borderColor = newState ? kColorCheckOn.CGColor : kColorCheckBorder.CGColor;
+    [[cb viewWithTag:9999] removeFromSuperview];
+    
+    if (newState && @available(iOS 13.0, *)) {
+        UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(3, 3, 16, 16)];
+        check.image = [UIImage systemImageNamed:@"checkmark"];
+        check.tintColor = [UIColor whiteColor];
+        check.contentMode = UIViewContentModeScaleAspectFit;
+        check.tag = 9999;
+        [cb addSubview:check];
+    }
+    
+    [[NSUserDefaults standardUserDefaults] setBool:newState forKey:key];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    ESPPrefsSetBool(key, newState);
     ESPSyncFromPrefs();
 }
 
-- (void)reloadFloatingAuxButtonsFromPrefs {
-    [self refreshAimbotButtonTitles];
+- (void)saveSettingsTapped {
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    ESPSyncFromPrefs();
+    
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"✅"
+                                                                   message:@"Đã lưu cài đặt!"
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)loadMenuButtonPosition {
-    CGFloat x = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingMenuBtnX"];
-    CGFloat y = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingMenuBtnY"];
-    if (x > 0 || y > 0) {
-        _menuButton.frame = CGRectMake(x, y, kMenuButtonSize, kMenuButtonSize);
-    }
-
-    CGFloat sx = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatSwitchX"];
-    CGFloat sy = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatSwitchY"];
-    if (sx > 0 || sy > 0) {
-        _floatSwitch.frame = CGRectMake(sx, sy, _floatSwitch.frame.size.width, _floatSwitch.frame.size.height);
-    }
-
-    CGFloat ax = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingAimBtnX"];
-    CGFloat ay = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingAimBtnY"];
-    if (ax > 0 || ay > 0) {
-        _aimbotButton.frame = CGRectMake(ax, ay, kAuxButtonSize, kAuxButtonSize);
-    } else {
-        _aimbotButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                         _menuButton.frame.origin.y,
-                                         kAuxButtonSize, kAuxButtonSize);
-    }
-
-    CGFloat mx = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingModeBtnX"];
-    CGFloat my = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingModeBtnY"];
-    if (mx > 0 || my > 0) {
-        _aimbotModeButton.frame = CGRectMake(mx, my, kAuxButtonSize, kAuxButtonSize);
-    } else {
-        _aimbotModeButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                             CGRectGetMaxY(_menuButton.frame) + kAuxGap,
-                                             kAuxButtonSize, kAuxButtonSize);
-    }
-
-    CGFloat tx = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingTargetBtnX"];
-    CGFloat ty = [[NSUserDefaults standardUserDefaults] floatForKey:@"FloatingTargetBtnY"];
-    if (tx > 0 || ty > 0) {
-        _aimbotTargetButton.frame = CGRectMake(tx, ty, kAuxButtonSize, kAuxButtonSize);
-    } else {
-        _aimbotTargetButton.frame = CGRectMake(CGRectGetMaxX(_menuButton.frame) + kAuxGap,
-                                               CGRectGetMaxY(_aimbotModeButton.frame) + kAuxGap,
-                                               kAuxButtonSize, kAuxButtonSize);
-    }
+- (void)closeTapped {
+    [[NSUserDefaults standardUserDefaults] setFloat:_floatingPanel.frame.origin.x forKey:@"FloatingPanelX"];
+    [[NSUserDefaults standardUserDefaults] setFloat:_floatingPanel.frame.origin.y forKey:@"FloatingPanelY"];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    if (self.onCloseBlock) self.onCloseBlock();
 }
 
-- (void)refreshAimbotButtonVisibility {
-    BOOL showAim = ESPPrefsBool(NSSENCRYPT("FloatAimBtn"), YES);
-    BOOL showghost = ESPPrefsBool(NSSENCRYPT("showghost"), YES);
-    _aimbotButton.hidden = !showAim;
-    _floatSwitch.hidden = YES;
-    _aimbotModeButton.hidden = YES;
-    _aimbotTargetButton.hidden = YES;
-}
-
-- (void)refreshAimbotButtonTitles {
-    BOOL on = ESPPrefsBool(NSSENCRYPT("Aimbot"), NO);
-    int mode = (int)ESPPrefsFloat(NSSENCRYPT("TriggerMode"), 0.0f);
-    if (mode < 0 || mode > 3) mode = 0;
-    int aimPos = (int)ESPPrefsFloat(NSSENCRYPT("AimPos"), 0.0f);
-    if (aimPos < 0 || aimPos > 2) aimPos = 0;
-
-    _aimbotButton.backgroundColor = on ? [UIColor colorWithRed:kAccentR green:kAccentG blue:kAccentB alpha:0.90f]
-                                       : [UIColor colorWithWhite:0.12f alpha:0.90f];
-    [_aimbotButton setTitle:(on ? @"AIM" : @"AIM") forState:UIControlStateNormal];
-    [_aimbotModeButton setTitle:titleForTriggerMode(mode) forState:UIControlStateNormal];
-    [_aimbotTargetButton setTitle:titleForAimPos(aimPos) forState:UIControlStateNormal];
-    [self refreshAimbotButtonVisibility];
-}
-
-- (UIViewController *)viewControllerForView:(UIView *)view {
-    UIResponder *r = view;
-    while (r && ![r isKindOfClass:[UIViewController class]]) r = [r nextResponder];
-    return [r isKindOfClass:[UIViewController class]] ? (UIViewController *)r : nil;
-}
-
-- (void)presentModMenu {
-    UIViewController *parentVC = [self viewControllerForView:self];
-    if (!parentVC) return;
-    ModMenuViewController *vc = [[ModMenuViewController alloc] init];
-    vc.view.frame = self.bounds;
-    __weak MenuView *wself = self;
-    vc.onCloseBlock = ^{
-        [wself dismissModMenu];
-    };
-    vc.onExitHUDRequested = ^{
-        if (wself.onExitHUDRequested) wself.onExitHUDRequested();
-    };
-    _presentedModMenu = vc;
-    [parentVC addChildViewController:vc];
-    [self addSubview:vc.view];
-    [vc didMoveToParentViewController:parentVC];
-    [self bringSubviewToFront:vc.view];
-}
-
-- (void)dismissModMenu {
-    if (!_presentedModMenu) return;
-    ModMenuViewController *vc = _presentedModMenu;
-    _presentedModMenu = nil;
-    [vc willMoveToParentViewController:nil];
-    [vc.view removeFromSuperview];
-    [vc removeFromParentViewController];
-    [self reloadFloatingAuxButtonsFromPrefs];
-}
-
-- (void)showMenu {
-    if (_presentedModMenu) return;
-    [self presentModMenu];
-}
-
-- (void)hideMenu {
-    if (_presentedModMenu) {
-        [self dismissModMenu];
-        return;
-    }
-}
-
-- (BOOL)handleTouchAtWindowPoint:(CGPoint)windowPoint phase:(UITouchPhase)phase pointerId:(NSInteger)pointerId {
-    CGPoint local = [self convertPoint:windowPoint fromView:self.window];
-    const CGFloat kInset = 12.0f;
-    CGRect btnHit = CGRectInset(_menuButton.frame, -kInset, -kInset);
-    BOOL insideBtn = CGRectContainsPoint(btnHit, local);
-    BOOL insideAim = NO;
-    BOOL insideMode = NO;
-    BOOL insideTarget = NO;
-    BOOL insideSwitch = CGRectContainsPoint(CGRectInset(_floatSwitch.frame, -12, -12), local);
-
-    if (!_aimbotButton.hidden) {
-        CGRect aimHit = CGRectInset(_aimbotButton.frame, -kInset, -kInset);
-        insideAim = CGRectContainsPoint(aimHit, local);
-    }
-    if (!_aimbotModeButton.hidden) {
-        CGRect modeHit = CGRectInset(_aimbotModeButton.frame, -kInset, -kInset);
-        insideMode = CGRectContainsPoint(modeHit, local);
-    }
-    if (!_aimbotTargetButton.hidden) {
-        CGRect targetHit = CGRectInset(_aimbotTargetButton.frame, -kInset, -kInset);
-        insideTarget = CGRectContainsPoint(targetHit, local);
-    }
-
-    if (_presentedModMenu) {
-        CGPoint inMenuView = [self convertPoint:local toView:_presentedModMenu.view];
-        if ([_presentedModMenu handleTouchAtViewPoint:inMenuView phase:(NSInteger)phase pointerId:pointerId])
-            return YES;
-        if (!insideBtn && !insideAim && !insideMode && !insideTarget) {
-            if (phase == UITouchPhaseBegan) [self dismissModMenu];
+// ─── TOUCH HANDLING ──────────────────────────
+- (BOOL)handleTouchAtViewPoint:(CGPoint)point phase:(NSInteger)phase pointerId:(NSInteger)pointerId {
+    BOOL inside = CGRectContainsPoint(_floatingPanel.frame, point);
+    UITouchPhase ph = (UITouchPhase)phase;
+    
+    if (ph == UITouchPhaseBegan) {
+        if (!inside) return NO;
+        if (_trackingPointerId != -1 && _trackingPointerId != pointerId) return NO;
+        _trackingPointerId = pointerId;
+        _menuDragging = NO;
+        
+        CGPoint ip = CGPointMake(point.x - _floatingPanel.frame.origin.x,
+                                 point.y - _floatingPanel.frame.origin.y);
+        
+        if (ip.y < kHeaderHeight) {
+            _menuDragging = YES;
+            _menuDragStartOrigin = _floatingPanel.frame.origin;
+            _menuDragStartTouch = point;
             return YES;
         }
-    }
-
-    switch (phase) {
-        case UITouchPhaseBegan: {
-            if (insideSwitch) {
-                _touchOnSwitch = YES;
-                _switchDragging = NO;
-                _switchDragStartCenter = _floatSwitch.center;
-                _switchDragStartPoint = local;
-                _trackingPointerId = pointerId;
-                return YES;
+        
+        if (ip.y > kHeaderHeight + kTopTabHeight) {
+            CGPoint cp = CGPointMake(ip.x, ip.y - kHeaderHeight - kTopTabHeight + _contentScrollView.contentOffset.y);
+            for (UIView *row in _contentContainer.subviews) {
+                if (row.tag == 100 && CGRectContainsPoint(row.frame, cp)) {
+                    objc_setAssociatedObject(self, "selectedRow", row, OBJC_ASSOCIATION_ASSIGN);
+                    return YES;
+                }
             }
-            if (insideAim && !_touchOnAimbotButton) {
-                _touchOnAimbotButton = YES;
-                _trackingPointerId = pointerId;
-                _aimbotButtonDragging = NO;
-                _aimbotDragStartCenter = _aimbotButton.center;
-                _aimbotDragStartPoint = local;
-                return YES;
-            }
-            if (insideMode && !_touchOnAimbotModeButton) {
-                _touchOnAimbotModeButton = YES;
-                _trackingPointerId = pointerId;
-                _aimbotModeButtonDragging = NO;
-                _aimbotModeDragStartCenter = _aimbotModeButton.center;
-                _aimbotModeDragStartPoint = local;
-                return YES;
-            }
-            if (insideTarget && !_touchOnAimbotTargetButton) {
-                _touchOnAimbotTargetButton = YES;
-                _trackingPointerId = pointerId;
-                _aimbotTargetButtonDragging = NO;
-                _aimbotTargetDragStartCenter = _aimbotTargetButton.center;
-                _aimbotTargetDragStartPoint = local;
-                return YES;
-            }
-            if (insideBtn && !_touchOnButton) {
-                _touchOnButton = YES;
-                _buttonDragging = NO;
-                _trackingPointerId = pointerId;
-                _buttonDragStartCenter = _menuButton.center;
-                _buttonDragStartPoint = local;
-                return YES;
-            }
-            return NO;
         }
-        case UITouchPhaseMoved: {
-            if (_touchOnSwitch && pointerId == _trackingPointerId) {
-                CGFloat dx = local.x - _switchDragStartPoint.x;
-                CGFloat dy = local.y - _switchDragStartPoint.y;
-                if (!_switchDragging && fabs(dx)+fabs(dy) > 12) {
-                    _switchDragging = YES;
-                }
-                if (_switchDragging) {
-                    _floatSwitch.center = CGPointMake(_switchDragStartCenter.x + dx, _switchDragStartCenter.y + dy);
-                    _switchDragStartCenter = _floatSwitch.center;
-                    _switchDragStartPoint = local;
-                }
-                return YES;
-            }
-            if (_touchOnButton && pointerId == _trackingPointerId) {
-                const CGFloat kDragThreshold = 12.0f;
-                CGFloat dx = local.x - _buttonDragStartPoint.x;
-                CGFloat dy = local.y - _buttonDragStartPoint.y;
-                if (!_buttonDragging && (fabs(dx) + fabs(dy) > kDragThreshold)) {
-                    _buttonDragging = YES;
-                }
-                if (_buttonDragging) {
-                    _menuButton.center = CGPointMake(_buttonDragStartCenter.x + dx, _buttonDragStartCenter.y + dy);
-                    _buttonDragStartCenter = _menuButton.center;
-                    _buttonDragStartPoint = local;
-                }
-                return YES;
-            }
-            if (_touchOnAimbotButton && pointerId == _trackingPointerId) {
-                const CGFloat kDragThreshold = 12.0f;
-                CGFloat dx = local.x - _aimbotDragStartPoint.x;
-                CGFloat dy = local.y - _aimbotDragStartPoint.y;
-                if (!_aimbotButtonDragging && (fabs(dx) + fabs(dy) > kDragThreshold)) {
-                    _aimbotButtonDragging = YES;
-                }
-                if (_aimbotButtonDragging) {
-                    _aimbotButton.center = CGPointMake(_aimbotDragStartCenter.x + dx, _aimbotDragStartCenter.y + dy);
-                    _aimbotDragStartCenter = _aimbotButton.center;
-                    _aimbotDragStartPoint = local;
-                }
-                return YES;
-            }
-            if (_touchOnAimbotModeButton && pointerId == _trackingPointerId) {
-                const CGFloat kDragThreshold = 12.0f;
-                CGFloat dx = local.x - _aimbotModeDragStartPoint.x;
-                CGFloat dy = local.y - _aimbotModeDragStartPoint.y;
-                if (!_aimbotModeButtonDragging && (fabs(dx) + fabs(dy) > kDragThreshold)) {
-                    _aimbotModeButtonDragging = YES;
-                }
-                if (_aimbotModeButtonDragging) {
-                    _aimbotModeButton.center = CGPointMake(_aimbotModeDragStartCenter.x + dx, _aimbotModeDragStartCenter.y + dy);
-                    _aimbotModeDragStartCenter = _aimbotModeButton.center;
-                    _aimbotModeDragStartPoint = local;
-                }
-                return YES;
-            }
-            if (_touchOnAimbotTargetButton && pointerId == _trackingPointerId) {
-                const CGFloat kDragThreshold = 12.0f;
-                CGFloat dx = local.x - _aimbotTargetDragStartPoint.x;
-                CGFloat dy = local.y - _aimbotTargetDragStartPoint.y;
-                if (!_aimbotTargetButtonDragging && (fabs(dx) + fabs(dy) > kDragThreshold)) {
-                    _aimbotTargetButtonDragging = YES;
-                }
-                if (_aimbotTargetButtonDragging) {
-                    _aimbotTargetButton.center = CGPointMake(_aimbotTargetDragStartCenter.x + dx, _aimbotTargetDragStartCenter.y + dy);
-                    _aimbotTargetDragStartCenter = _aimbotTargetButton.center;
-                    _aimbotTargetDragStartPoint = local;
-                }
-                return YES;
-            }
-            return _touchOnButton || _touchOnAimbotButton || _touchOnAimbotModeButton || _touchOnAimbotTargetButton;
-        }
-        case UITouchPhaseEnded:
-        case UITouchPhaseCancelled: {
-            if (_touchOnSwitch && pointerId == _trackingPointerId) {
-                _touchOnSwitch = NO;
-                if (_switchDragging) {
-                    // lưu vị trí
-                } else {
-                    [_floatSwitch setOn:!_floatSwitch.isOn animated:YES];
-                    [_floatSwitch sendActionsForControlEvents:UIControlEventValueChanged];
-                    ESPPrefsSetBool(NSSENCRYPT("testGhost"), _floatSwitch.isOn);
-                    ESPPrefsSync();
-                }
-                _switchDragging = NO;
-                return YES;
-            }
-            if (_touchOnAimbotButton && pointerId == _trackingPointerId) {
-                _touchOnAimbotButton = NO;
-                _trackingPointerId = -1;
-                if (_aimbotButtonDragging) {
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotButton.frame.origin.x forKey:@"FloatingAimBtnX"];
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotButton.frame.origin.y forKey:@"FloatingAimBtnY"];
-                    [[NSUserDefaults standardUserDefaults] synchronize];
-                } else {
-                    BOOL on = ESPPrefsBool(NSSENCRYPT("Aimbot"), NO);
-                    ESPPrefsSetBool(NSSENCRYPT("Aimbot"), !on);
-                    ESPPrefsSync();
-                    ESPSyncFromPrefs();
-                    [self refreshAimbotButtonTitles];
-                }
-                _aimbotButtonDragging = NO;
-                return YES;
-            }
-            if (_touchOnAimbotModeButton && pointerId == _trackingPointerId) {
-                _touchOnAimbotModeButton = NO;
-                _trackingPointerId = -1;
-                if (_aimbotModeButtonDragging) {
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotModeButton.frame.origin.x forKey:@"FloatingModeBtnX"];
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotModeButton.frame.origin.y forKey:@"FloatingModeBtnY"];
-                    [[NSUserDefaults standardUserDefaults] synchronize];
-                } else {
-                    int mode = (int)ESPPrefsFloat(NSSENCRYPT("TriggerMode"), 0.0f);
-                    mode = (mode + 1) % 4;
-                    ESPPrefsSetFloat(NSSENCRYPT("TriggerMode"), (float)mode);
-                    ESPPrefsSync();
-                    ESPSyncFromPrefs();
-                    [self refreshAimbotButtonTitles];
-                }
-                _aimbotModeButtonDragging = NO;
-                return YES;
-            }
-            if (_touchOnAimbotTargetButton && pointerId == _trackingPointerId) {
-                _touchOnAimbotTargetButton = NO;
-                _trackingPointerId = -1;
-                if (_aimbotTargetButtonDragging) {
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotTargetButton.frame.origin.x forKey:@"FloatingTargetBtnX"];
-                    [[NSUserDefaults standardUserDefaults] setFloat:_aimbotTargetButton.frame.origin.y forKey:@"FloatingTargetBtnY"];
-                    [[NSUserDefaults standardUserDefaults] synchronize];
-                } else {
-                    int ap = (int)ESPPrefsFloat(NSSENCRYPT("AimPos"), 0.0f);
-                    if (ap < 0 || ap > 2) ap = 0;
-                    ap = (ap + 1) % 3;
-                    ESPPrefsSetFloat(NSSENCRYPT("AimPos"), (float)ap);
-                    ESPPrefsSync();
-                    ESPSyncFromPrefs();
-                    [self refreshAimbotButtonTitles];
-                }
-                _aimbotTargetButtonDragging = NO;
-                return YES;
-            }
-            if (_touchOnButton && pointerId == _trackingPointerId) {
-                BOOL wasDrag = _buttonDragging;
-                _touchOnButton = NO;
-                _buttonDragging = NO;
-                _trackingPointerId = -1;
-                if (!wasDrag) [self togglePanel];
-                [[NSUserDefaults standardUserDefaults] setFloat:(float)_menuButton.frame.origin.x forKey:@"FloatingMenuBtnX"];
-                [[NSUserDefaults standardUserDefaults] setFloat:(float)_menuButton.frame.origin.y forKey:@"FloatingMenuBtnY"];
-                [[NSUserDefaults standardUserDefaults] synchronize];
-                return YES;
-            }
-            return NO;
-        }
-        default:
-            return NO;
+        return YES;
     }
-}
-
-- (BOOL)handleTouchAtLocalPoint:(CGPoint)localPoint phase:(UITouchPhase)phase pointerId:(NSInteger)pointerId {
-    return [self handleTouchAtWindowPoint:[self convertPoint:localPoint toView:self.window] phase:phase pointerId:pointerId];
-}
-
-- (void)togglePanel {
-    if (_presentedModMenu) {
-        [self dismissModMenu];
-        return;
+    
+    if (ph == UITouchPhaseEnded || ph == UITouchPhaseCancelled) {
+        if (pointerId != _trackingPointerId) return NO;
+        if (!_menuDragging) {
+            UIView *row = objc_getAssociatedObject(self, "selectedRow");
+            if (row) {
+                [self checkboxTapped:row];
+                objc_setAssociatedObject(self, "selectedRow", nil, OBJC_ASSOCIATION_ASSIGN);
+            }
+        } else {
+            [[NSUserDefaults standardUserDefaults] setFloat:_floatingPanel.frame.origin.x forKey:@"FloatingPanelX"];
+            [[NSUserDefaults standardUserDefaults] setFloat:_floatingPanel.frame.origin.y forKey:@"FloatingPanelY"];
+            [[NSUserDefaults standardUserDefaults] synchronize];
+        }
+        _trackingPointerId = -1;
+        _menuDragging = NO;
+        return YES;
     }
-    [self presentModMenu];
+    
+    if (ph == UITouchPhaseMoved && _menuDragging && pointerId == _trackingPointerId) {
+        CGFloat dx = point.x - _menuDragStartTouch.x;
+        CGFloat dy = point.y - _menuDragStartTouch.y;
+        CGRect s = self.view.bounds;
+        CGFloat nx = MAX(0, MIN(s.size.width - kPanelWidth, _menuDragStartOrigin.x + dx));
+        CGFloat ny = MAX(0, MIN(s.size.height - kPanelHeight, _menuDragStartOrigin.y + dy));
+        _floatingPanel.frame = CGRectMake(nx, ny, kPanelWidth, kPanelHeight);
+        return YES;
+    }
+    
+    return inside && pointerId == _trackingPointerId;
 }
 
 @end
