@@ -1,0 +1,37 @@
+name: Build TIPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    env:
+      THEOS: ${{ github.workspace }}/theos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        run: |
+          set -e
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+
+      - name: Build
+        run: |
+          set -e
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          make clean || true
+          make package FINALPACKAGE=1
+
+      - name: Upload TIPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: TIPA-QUANHFF
+          path: "**/*.tipa"
+          if-no-files-found: error
