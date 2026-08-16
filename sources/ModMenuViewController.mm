@@ -1,4 +1,4 @@
-// ModMenuViewController.mm — Giao diện mới như ảnh yêu cầu
+// ModMenuViewController.mm — Giao diện mới (nền tối, 3 tab)
 #import "ModMenuViewController.h"
 #import "../esp/drawing_view/esp.h"
 #import "../esp/drawing_view/ESPPrefs.h"
@@ -14,7 +14,7 @@ static const CGFloat kTopTabHeight  = 40.0f;
 static const CGFloat kRowHeight     = 42.0f;
 static const CGFloat kCheckboxSize  = 22.0f;
 
-// Màu sắc theo ảnh mẫu
+// Màu sắc theo ảnh mẫu (nền tối, chữ trắng, checkbox xanh)
 #define kColorBG          [UIColor colorWithRed:0.08f green:0.08f blue:0.12f alpha:0.95f]
 #define kColorHeader      [UIColor colorWithRed:0.05f green:0.05f blue:0.08f alpha:1.0f]
 #define kColorTabBar      [UIColor colorWithRed:0.12f green:0.12f blue:0.18f alpha:1.0f]
