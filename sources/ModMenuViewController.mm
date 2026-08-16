@@ -1,4 +1,4 @@
-// ModMenuViewController.mm — Giao diện menu mới
+// ModMenuViewController.mm — Giao diện mới như ảnh yêu cầu
 #import "ModMenuViewController.h"
 #import "../esp/drawing_view/esp.h"
 #import "../esp/drawing_view/ESPPrefs.h"
@@ -7,29 +7,27 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
-static const CGFloat kPanelWidth    = 340.0f;
-static const CGFloat kPanelHeight   = 380.0f;
-static const CGFloat kHeaderHeight  = 48.0f;
-static const CGFloat kTopTabHeight  = 44.0f;
-static const CGFloat kRowHeight     = 44.0f;
-static const CGFloat kCheckboxSize  = 24.0f;
+static const CGFloat kPanelWidth    = 320.0f;
+static const CGFloat kPanelHeight   = 400.0f;
+static const CGFloat kHeaderHeight  = 50.0f;
+static const CGFloat kTopTabHeight  = 40.0f;
+static const CGFloat kRowHeight     = 42.0f;
+static const CGFloat kCheckboxSize  = 22.0f;
 
 // Màu sắc theo ảnh mẫu
-#define kColorBG          [UIColor colorWithRed:0.12f green:0.12f blue:0.16f alpha:0.95f]
-#define kColorHeader      [UIColor colorWithRed:0.08f green:0.08f blue:0.12f alpha:1.0f]
-#define kColorTabBar      [UIColor colorWithRed:0.18f green:0.18f blue:0.24f alpha:1.0f]
-#define kColorTabActive   [UIColor colorWithRed:0.25f green:0.25f blue:0.32f alpha:1.0f]
-#define kColorTabInactive [UIColor clearColor]
-#define kColorTabText     [UIColor colorWithWhite:0.7f alpha:1.0f]
+#define kColorBG          [UIColor colorWithRed:0.08f green:0.08f blue:0.12f alpha:0.95f]
+#define kColorHeader      [UIColor colorWithRed:0.05f green:0.05f blue:0.08f alpha:1.0f]
+#define kColorTabBar      [UIColor colorWithRed:0.12f green:0.12f blue:0.18f alpha:1.0f]
+#define kColorTabActive   [UIColor colorWithRed:0.20f green:0.20f blue:0.28f alpha:1.0f]
+#define kColorTabText     [UIColor colorWithWhite:0.6f alpha:1.0f]
 #define kColorTabTextActive [UIColor whiteColor]
-#define kColorRowBG       [UIColor colorWithWhite:0.15f alpha:1.0f]
-#define kColorText        [UIColor whiteColor]
-#define kColorMuted       [UIColor colorWithWhite:0.6f alpha:1.0f]
-#define kColorSeparator   [UIColor colorWithWhite:0.25f alpha:1.0f]
-#define kColorCheckOn     [UIColor colorWithRed:0.0f green:0.7f blue:0.4f alpha:1.0f]
+#define kColorRowBG       [UIColor colorWithRed:0.10f green:0.10f blue:0.16f alpha:1.0f]
+#define kColorText        [UIColor colorWithWhite:0.95f alpha:1.0f]
+#define kColorSeparator   [UIColor colorWithWhite:0.2f alpha:1.0f]
+#define kColorCheckOn     [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f]
 #define kColorCheckBorder [UIColor colorWithWhite:0.4f alpha:1.0f]
 #define kColorCheckOff    [UIColor colorWithWhite:0.2f alpha:1.0f]
-#define kColorSectionText [UIColor colorWithRed:0.0f green:0.7f blue:0.4f alpha:1.0f]
+#define kColorSectionText [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f]
 
 typedef NS_ENUM(NSInteger, MenuTab) {
     MenuTabESP    = 0,
@@ -38,16 +36,15 @@ typedef NS_ENUM(NSInteger, MenuTab) {
 };
 
 @interface ModMenuViewController () <UIGestureRecognizerDelegate>
-@property (nonatomic, assign) MenuTab              currentTab;
-@property (nonatomic, strong) UIView               *floatingPanel;
-@property (nonatomic, strong) UIScrollView         *contentScrollView;
-@property (nonatomic, strong) UIView               *contentContainer;
+@property (nonatomic, assign) MenuTab currentTab;
+@property (nonatomic, strong) UIView *floatingPanel;
+@property (nonatomic, strong) UIScrollView *contentScrollView;
+@property (nonatomic, strong) UIView *contentContainer;
 @property (nonatomic, strong) NSMutableArray<UIButton *> *tabButtons;
-@property (nonatomic, strong) NSMutableDictionary  *checkboxStates;
-@property (nonatomic, assign) NSInteger  trackingPointerId;
-@property (nonatomic, assign) BOOL       menuDragging;
-@property (nonatomic, assign) CGPoint    menuDragStartOrigin;
-@property (nonatomic, assign) CGPoint    menuDragStartTouch;
+@property (nonatomic, assign) NSInteger trackingPointerId;
+@property (nonatomic, assign) BOOL menuDragging;
+@property (nonatomic, assign) CGPoint menuDragStartOrigin;
+@property (nonatomic, assign) CGPoint menuDragStartTouch;
 @property (nonatomic, copy) void (^onCloseBlock)(void);
 @property (nonatomic, copy) void (^onExitHUDRequested)(void);
 @end
@@ -61,7 +58,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     _trackingPointerId = -1;
     _currentTab = MenuTabESP;
     _tabButtons = [NSMutableArray array];
-    _checkboxStates = [NSMutableDictionary dictionary];
     
     [self setupFloatingPanel];
     [self setupHeaderBar];
@@ -75,14 +71,14 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     _floatingPanel = [[UIView alloc] initWithFrame:
         CGRectMake(pos.x, pos.y, kPanelWidth, kPanelHeight)];
     _floatingPanel.backgroundColor = kColorBG;
-    _floatingPanel.layer.cornerRadius = 14.0f;
+    _floatingPanel.layer.cornerRadius = 16.0f;
     _floatingPanel.layer.shadowColor = [UIColor blackColor].CGColor;
-    _floatingPanel.layer.shadowOpacity = 0.6f;
-    _floatingPanel.layer.shadowRadius = 20.0f;
-    _floatingPanel.layer.shadowOffset = CGSizeMake(0, 6);
+    _floatingPanel.layer.shadowOpacity = 0.7f;
+    _floatingPanel.layer.shadowRadius = 24.0f;
+    _floatingPanel.layer.shadowOffset = CGSizeMake(0, 8);
     _floatingPanel.layer.masksToBounds = NO;
     _floatingPanel.layer.borderWidth = 0.5f;
-    _floatingPanel.layer.borderColor = [UIColor colorWithWhite:0.3f alpha:0.5f].CGColor;
+    _floatingPanel.layer.borderColor = [UIColor colorWithWhite:0.3f alpha:0.3f].CGColor;
     [self.view addSubview:_floatingPanel];
 }
 
@@ -97,55 +93,54 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     return CGPointMake(x, y);
 }
 
-// ─── HEADER: "Quanh External - Free Fire" ───
+// ─── HEADER ──────────────────────────────────
 - (void)setupHeaderBar {
     UIView *hdr = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, kHeaderHeight)];
     hdr.backgroundColor = kColorHeader;
-    hdr.layer.cornerRadius = 14.0f;
+    hdr.layer.cornerRadius = 16.0f;
     hdr.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
     [_floatingPanel addSubview:hdr];
     
-    // Icon game (dùng SF Symbol)
+    // Icon game
     if (@available(iOS 13.0, *)) {
-        UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectMake(14, 12, 24, 24)];
+        UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectMake(14, 13, 24, 24)];
         icon.image = [UIImage systemImageNamed:@"gamecontroller.fill"];
-        icon.tintColor = [UIColor colorWithRed:0.0f green:0.7f blue:0.4f alpha:1.0f];
+        icon.tintColor = [UIColor colorWithRed:0.0f green:0.75f blue:0.4f alpha:1.0f];
         icon.contentMode = UIViewContentModeScaleAspectFit;
         [hdr addSubview:icon];
     }
     
     // Title
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(46, 4, kPanelWidth - 100, kHeaderHeight)];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(44, 0, kPanelWidth - 100, kHeaderHeight)];
     title.text = @"Quanh External - Free Fire";
-    title.font = [UIFont systemFontOfSize:16 weight:UIFontWeightBold];
+    title.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
     title.textColor = [UIColor whiteColor];
-    title.textAlignment = NSTextAlignmentLeft;
     [hdr addSubview:title];
     
-    // Nút đóng (X) - nhỏ gọn
+    // Nút đóng
     UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
-    close.frame = CGRectMake(kPanelWidth - 40, 8, 30, 30);
-    close.backgroundColor = [UIColor colorWithWhite:0.3f alpha:0.3f];
-    close.layer.cornerRadius = 15.0f;
+    close.frame = CGRectMake(kPanelWidth - 44, 8, 32, 32);
+    close.backgroundColor = [UIColor colorWithWhite:0.3f alpha:0.2f];
+    close.layer.cornerRadius = 16.0f;
     if (@available(iOS 13.0, *)) {
         UIImage *x = [UIImage systemImageNamed:@"xmark"];
         [close setImage:x forState:UIControlStateNormal];
     } else {
         [close setTitle:@"✕" forState:UIControlStateNormal];
     }
-    close.tintColor = [UIColor colorWithWhite:0.7f alpha:1.0f];
+    close.tintColor = [UIColor colorWithWhite:0.6f alpha:1.0f];
     [close addTarget:self action:@selector(closeTapped) forControlEvents:UIControlEventTouchUpInside];
     [hdr addSubview:close];
 }
 
-// ─── TAB BAR: ESP | AIMBOT | KHÁC ───────────
+// ─── TAB BAR ─────────────────────────────────
 - (void)setupTopTabBar {
     UIView *tabBar = [[UIView alloc] initWithFrame:
         CGRectMake(0, kHeaderHeight, kPanelWidth, kTopTabHeight)];
     tabBar.backgroundColor = kColorTabBar;
     [_floatingPanel addSubview:tabBar];
     
-    NSArray *titles = @[ @"ESP", @"AIMBOT", @"KHÁC" ];
+    NSArray *titles = @[@"ESP", @"AIMBOT", @"KHÁC"];
     NSInteger n = titles.count;
     CGFloat tabW = kPanelWidth / (CGFloat)n;
     
@@ -156,14 +151,13 @@ typedef NS_ENUM(NSInteger, MenuTab) {
         BOOL active = (i == _currentTab);
         
         [btn setTitle:titles[i] forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont systemFontOfSize:14 weight:active ? UIFontWeightBold : UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:active ? UIFontWeightBold : UIFontWeightMedium];
         [btn setTitleColor:active ? kColorTabTextActive : kColorTabText forState:UIControlStateNormal];
-        btn.backgroundColor = active ? kColorTabActive : kColorTabInactive;
+        btn.backgroundColor = active ? kColorTabActive : [UIColor clearColor];
         
-        // Gạch chân cho tab active
         if (active) {
             UIView *indicator = [[UIView alloc] initWithFrame:
-                CGRectMake(tabW * 0.25f, kTopTabHeight - 3, tabW * 0.5f, 3)];
+                CGRectMake(tabW * 0.3f, kTopTabHeight - 3, tabW * 0.4f, 3)];
             indicator.backgroundColor = kColorSectionText;
             indicator.layer.cornerRadius = 1.5f;
             indicator.tag = 9999;
@@ -197,24 +191,22 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     [_contentScrollView addSubview:_contentContainer];
 }
 
-// ─── CHECKBOX với dấu ✔ ──────────────────────
+// ─── CHECKBOX ─────────────────────────────────
 - (UIView *)makeCheckboxWithState:(BOOL)checked {
-    UIView *box = [[UIView alloc] initWithFrame:CGRectMake(12, 0, kCheckboxSize, kCheckboxSize)];
+    UIView *box = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kCheckboxSize, kCheckboxSize)];
     box.backgroundColor = checked ? kColorCheckOn : kColorCheckOff;
     box.layer.cornerRadius = 4.0f;
     box.layer.borderWidth = 1.5f;
     box.layer.borderColor = checked ? kColorCheckOn.CGColor : kColorCheckBorder.CGColor;
     box.tag = checked ? 1 : 0;
     
-    if (checked) {
-        if (@available(iOS 13.0, *)) {
-            UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(4, 4, 16, 16)];
-            check.image = [UIImage systemImageNamed:@"checkmark"];
-            check.tintColor = [UIColor whiteColor];
-            check.contentMode = UIViewContentModeScaleAspectFit;
-            check.tag = 9999;
-            [box addSubview:check];
-        }
+    if (checked && @available(iOS 13.0, *)) {
+        UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(3, 3, 16, 16)];
+        check.image = [UIImage systemImageNamed:@"checkmark"];
+        check.tintColor = [UIColor whiteColor];
+        check.contentMode = UIViewContentModeScaleAspectFit;
+        check.tag = 9999;
+        [box addSubview:check];
     }
     return box;
 }
@@ -223,25 +215,26 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     BOOL on = [[NSUserDefaults standardUserDefaults] boolForKey:key];
     
     UIView *row = [[UIView alloc] initWithFrame:CGRectMake(0, 0, kPanelWidth, kRowHeight)];
-    row.backgroundColor = [UIColor clearColor];
+    row.backgroundColor = kColorRowBG;
     row.tag = 100;
     objc_setAssociatedObject(row, "key", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     
-    // Checkbox
+    // Checkbox bên trái
     UIView *cb = [self makeCheckboxWithState:on];
+    cb.frame = CGRectMake(16, (kRowHeight - kCheckboxSize) / 2.0f, kCheckboxSize, kCheckboxSize);
     cb.tag = 200;
     objc_setAssociatedObject(cb, "isCheckbox", @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     [row addSubview:cb];
     
     // Label
-    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(12 + kCheckboxSize + 12, 0, kPanelWidth - 50, kRowHeight)];
+    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(16 + kCheckboxSize + 12, 0, kPanelWidth - 60, kRowHeight)];
     lbl.text = title;
-    lbl.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    lbl.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     lbl.textColor = kColorText;
     [row addSubview:lbl];
     
-    // Separator line (trừ row cuối)
-    UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(12, kRowHeight - 0.5, kPanelWidth - 24, 0.5)];
+    // Separator
+    UIView *sep = [[UIView alloc] initWithFrame:CGRectMake(16, kRowHeight - 0.5, kPanelWidth - 32, 0.5)];
     sep.backgroundColor = kColorSeparator;
     [row addSubview:sep];
     
@@ -257,42 +250,37 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     CGFloat w = kPanelWidth;
     
     if (tab == MenuTabESP) {
-        // Tiêu đề ESP
         y = [self addSectionTitle:@"ESP" atY:y width:w];
-        
-        // Các checkbox ESP
-        NSArray *espItems = @[
+        NSArray *items = @[
             @[@"ESP ĐƯỜNG KẺ", @"Line"],
             @[@"ESP HỘP", @"Box"],
             @[@"ESP MÁU", @"Health"],
             @[@"ESP TÊN", @"Name"],
             @[@"ESP SỐ LƯỢNG", @"Count"]
         ];
-        y = [self addCheckboxRows:espItems atY:y width:w];
+        y = [self addCheckboxRows:items atY:y width:w];
         
     } else if (tab == MenuTabAimbot) {
         y = [self addSectionTitle:@"AIMBOT" atY:y width:w];
-        
-        NSArray *aimItems = @[
+        NSArray *items = @[
             @[@"Bật Aimbot", @"Aimbot"],
             @[@"Rage Aimbot", @"AimRage"],
             @[@"Đường Aim", @"LineAim"]
         ];
-        y = [self addCheckboxRows:aimItems atY:y width:w];
+        y = [self addCheckboxRows:items atY:y width:w];
         
     } else if (tab == MenuTabKhac) {
         y = [self addSectionTitle:@"KHÁC" atY:y width:w];
-        
-        NSArray *khacItems = @[
+        NSArray *items = @[
             @[@"Vô hạn đạn", @"VohaDan"],
             @[@"Bắn nhanh", @"FastFire"],
             @[@"Cam cao", @"camcao"],
             @[@"Không cần reload", @"NoReLoad"]
         ];
-        y = [self addCheckboxRows:khacItems atY:y width:w];
+        y = [self addCheckboxRows:items atY:y width:w];
     }
     
-    // Nút "LƯU CÀI ĐẶT" ở cuối (nếu cần)
+    // Nút LƯU CÀI ĐẶT
     y += 8;
     UIButton *saveBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     saveBtn.frame = CGRectMake(20, y, w - 40, 40);
@@ -300,7 +288,7 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     saveBtn.layer.cornerRadius = 8.0f;
     [saveBtn setTitle:@"LƯU CÀI ĐẶT" forState:UIControlStateNormal];
     [saveBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-    saveBtn.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
+    saveBtn.titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
     [saveBtn addTarget:self action:@selector(saveSettingsTapped) forControlEvents:UIControlEventTouchUpInside];
     [_contentContainer addSubview:saveBtn];
     y += 48;
@@ -310,19 +298,17 @@ typedef NS_ENUM(NSInteger, MenuTab) {
 }
 
 - (CGFloat)addSectionTitle:(NSString *)title atY:(CGFloat)y width:(CGFloat)w {
-    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(16, y + 8, w - 32, 24)];
+    UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(16, y + 6, w - 32, 22)];
     lbl.text = title;
-    lbl.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
+    lbl.font = [UIFont systemFontOfSize:12 weight:UIFontWeightBold];
     lbl.textColor = kColorSectionText;
     [_contentContainer addSubview:lbl];
-    return y + 36;
+    return y + 32;
 }
 
 - (CGFloat)addCheckboxRows:(NSArray *)items atY:(CGFloat)y width:(CGFloat)w {
     for (NSArray *item in items) {
-        NSString *title = item[0];
-        NSString *key = item[1];
-        UIView *row = [self buildCheckboxRowWithTitle:title key:key];
+        UIView *row = [self buildCheckboxRowWithTitle:item[0] key:item[1]];
         row.frame = CGRectMake(0, y, w, kRowHeight);
         [_contentContainer addSubview:row];
         y += kRowHeight;
@@ -345,13 +331,13 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     for (NSInteger i = 0; i < n; i++) {
         UIButton *btn = _tabButtons[i];
         BOOL active = (i == tab);
-        btn.backgroundColor = active ? kColorTabActive : kColorTabInactive;
+        btn.backgroundColor = active ? kColorTabActive : [UIColor clearColor];
         [btn setTitleColor:active ? kColorTabTextActive : kColorTabText forState:UIControlStateNormal];
-        btn.titleLabel.font = [UIFont systemFontOfSize:14 weight:active ? UIFontWeightBold : UIFontWeightMedium];
+        btn.titleLabel.font = [UIFont systemFontOfSize:13 weight:active ? UIFontWeightBold : UIFontWeightMedium];
         [[btn viewWithTag:9999] removeFromSuperview];
         if (active) {
             UIView *indicator = [[UIView alloc] initWithFrame:
-                CGRectMake(tabW * 0.25f, kTopTabHeight - 3, tabW * 0.5f, 3)];
+                CGRectMake(tabW * 0.3f, kTopTabHeight - 3, tabW * 0.4f, 3)];
             indicator.backgroundColor = kColorSectionText;
             indicator.layer.cornerRadius = 1.5f;
             indicator.tag = 9999;
@@ -364,7 +350,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     NSString *key = objc_getAssociatedObject(row, "key");
     if (!key) return;
     
-    // Tìm checkbox trong row
     UIView *cb = nil;
     for (UIView *v in row.subviews) {
         if (objc_getAssociatedObject(v, "isCheckbox")) {
@@ -378,13 +363,10 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     cb.tag = newState ? 1 : 0;
     cb.backgroundColor = newState ? kColorCheckOn : kColorCheckOff;
     cb.layer.borderColor = newState ? kColorCheckOn.CGColor : kColorCheckBorder.CGColor;
-    
-    // Xóa check cũ
     [[cb viewWithTag:9999] removeFromSuperview];
     
-    // Thêm check mới nếu cần
     if (newState && @available(iOS 13.0, *)) {
-        UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(4, 4, 16, 16)];
+        UIImageView *check = [[UIImageView alloc] initWithFrame:CGRectMake(3, 3, 16, 16)];
         check.image = [UIImage systemImageNamed:@"checkmark"];
         check.tintColor = [UIColor whiteColor];
         check.contentMode = UIViewContentModeScaleAspectFit;
@@ -392,11 +374,8 @@ typedef NS_ENUM(NSInteger, MenuTab) {
         [cb addSubview:check];
     }
     
-    // Lưu vào UserDefaults
     [[NSUserDefaults standardUserDefaults] setBool:newState forKey:key];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    
-    // Đồng bộ với ESPPrefs
     ESPPrefsSetBool(key, newState);
     ESPSyncFromPrefs();
 }
@@ -405,7 +384,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     [[NSUserDefaults standardUserDefaults] synchronize];
     ESPSyncFromPrefs();
     
-    // Hiển thị thông báo
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"✅"
                                                                    message:@"Đã lưu cài đặt!"
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -434,7 +412,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
         CGPoint ip = CGPointMake(point.x - _floatingPanel.frame.origin.x,
                                  point.y - _floatingPanel.frame.origin.y);
         
-        // Header - kéo menu
         if (ip.y < kHeaderHeight) {
             _menuDragging = YES;
             _menuDragStartOrigin = _floatingPanel.frame.origin;
@@ -442,7 +419,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
             return YES;
         }
         
-        // Content - checkbox
         if (ip.y > kHeaderHeight + kTopTabHeight) {
             CGPoint cp = CGPointMake(ip.x, ip.y - kHeaderHeight - kTopTabHeight + _contentScrollView.contentOffset.y);
             for (UIView *row in _contentContainer.subviews) {
@@ -457,7 +433,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
     
     if (ph == UITouchPhaseEnded || ph == UITouchPhaseCancelled) {
         if (pointerId != _trackingPointerId) return NO;
-        
         if (!_menuDragging) {
             UIView *row = objc_getAssociatedObject(self, "selectedRow");
             if (row) {
@@ -469,7 +444,6 @@ typedef NS_ENUM(NSInteger, MenuTab) {
             [[NSUserDefaults standardUserDefaults] setFloat:_floatingPanel.frame.origin.y forKey:@"FloatingPanelY"];
             [[NSUserDefaults standardUserDefaults] synchronize];
         }
-        
         _trackingPointerId = -1;
         _menuDragging = NO;
         return YES;
