@@ -1,37 +1,37 @@
 name: Build TIPA
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
-
-    env:
-      THEOS: ${{ github.workspace }}/theos
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v3
+      
       - name: Install Theos
         run: |
-          set -e
-          export THEOS="$GITHUB_WORKSPACE/theos"
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
-
-      - name: Build
+          sudo apt-get update
+          sudo apt-get install -y git build-essential unzip curl
+          git clone --recursive https://github.com/theos/theos.git $HOME/theos
+          echo "$HOME/theos/bin" >> $GITHUB_PATH
+          
+      - name: Build package
         run: |
-          set -e
-          export THEOS="$GITHUB_WORKSPACE/theos"
-          make clean || true
-          make package FINALPACKAGE=1
-
-      - name: Upload TIPA
-        uses: actions/upload-artifact@v4
+          export THEOS=$HOME/theos
+          make package
+          
+      - name: Rename to .tipa (if needed)
+        run: |
+          # Tìm file .deb và đổi tên thành .tipa
+          find . -name "*.deb" -exec cp {} ./package.tipa \;
+          # Hoặc nếu file đã là .tipa thì copy trực tiếp
+          find . -name "*.tipa" -exec cp {} ./package.tipa \;
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: TIPA-QUANHFF
-          path: "**/*.tipa"
-          if-no-files-found: error
+          name: tipa-package
+          path: ./package.tipa
