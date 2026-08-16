@@ -1,4 +1,9 @@
-# ... Phần đầu workflow giữ nguyên ...
+name: Build TIPA Package
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,10 +31,7 @@ jobs:
           find . -name "*.tipa" -exec cp {} ./package.tipa \;
           
       - name: Upload artifact
-        uses: actions/upload-artifact@v4  # Đã đổi từ v3 sang v4
+        uses: actions/upload-artifact@v4
         with:
           name: tipa-package
           path: ./package.tipa
-          # (Tùy chọn) Nếu bạn muốn nén file trước khi upload
-          # compression-level: 0 
-          # overwrite: true
